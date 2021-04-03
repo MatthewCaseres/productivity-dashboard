@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 
-@st.cache
+@st.cache(ttl=3600)
 def loadData(DATA_URL):
   csvFromSheet = '/'.join(DATA_URL.split('/')[:-1] + ['export?format=csv'])
   df = pd.read_csv(csvFromSheet, parse_dates=['start', 'end'])
