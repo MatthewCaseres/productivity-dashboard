@@ -9,6 +9,8 @@ streamlit = "*"
 pandas = "*"
 numpy = "*"
 pylint = "*"
+pip = "*"
+ipykernel = "*"
 
 [dev-packages]
 
