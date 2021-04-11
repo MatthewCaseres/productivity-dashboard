@@ -75,9 +75,10 @@ def getRollingAvgs(allData, low, high, WINDOW_SIZE):
 
 # Create a text element and let the reader know the data is loading.
 dataLoadState = st.text('Loading data...')
-# Load 10,000 rows of data into the dataframe.
+
+user_input = st.text_input("input the URL of a PUBLIC \"better tracker\" sheet", "https://docs.google.com/spreadsheets/d/1Qq13N2dgpU8TWwLLJKsmauKQM1Damvykkn2nOnFQ56A/edit#gid=580980480")
 rawData = loadData(
-    "https://docs.google.com/spreadsheets/d/1Qq13N2dgpU8TWwLLJKsmauKQM1Damvykkn2nOnFQ56A/edit#gid=580980480")
+    user_input)
 # Notify the reader that the data was successfully loaded.
 # dataLoadState.markdown('<h1 style="margin-bottom: 40px">Better Tracker</h1>', unsafe_allow_html=True)
 
