@@ -138,7 +138,7 @@ c1 = alt.Chart(filteredData).mark_bar().encode(
                         'N/A']+HIDDEN), alt.value('white'), alt.Color(ACTIVITY_OR_CATEGORY, legend=None)),
     opacity=alt.condition(selection, alt.value(1), alt.value(.2)),
     tooltip=[
-        'activity:N',
+        f"{ACTIVITY_OR_CATEGORY}:N",
         alt.Tooltip('Hour:Q', format='.2f', title='hours'),
         alt.Tooltip('start:T', format='%-I:%M %p', title='started'),
         alt.Tooltip('end:T', format='%-I:%M %p', title='ended'),
