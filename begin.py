@@ -4,7 +4,6 @@ import numpy as np
 import altair as alt
 import datetime
 
-
 @st.cache(ttl=3600)
 def loadData(DATA_URL):
     csvFromSheet = '/'.join(DATA_URL.split('/')[:-1] + ['export?format=csv'])
@@ -16,12 +15,14 @@ def loadData(DATA_URL):
 def fillDays(rawData):
     fillAfter = rawData.loc[rawData['start']
                             .shift(-1) != rawData['end'], 'end']
-    NAsDict = {'activity': [
+    NAsDict = {'category': [
+        "N/A"]*len(fillAfter), 'activity': [
         "N/A"]*len(fillAfter), "start": fillAfter, "end": [None]*len(fillAfter)}
     NAs = pd.DataFrame(NAsDict)[:-1]
 
     # These are for the beginning and end
     beginningEndDict = {
+        'category': ["N/A"]*2,
         'activity': ["N/A"]*2,
         "start": [min(rawData['start']).floor('D'), max(rawData['end'])],
         "end": [min(rawData['start']), max(rawData['end']).ceil('D')]
@@ -41,6 +42,7 @@ def fillDays(rawData):
     # Fill NA for added rows with correct values
     all['end'] = all['end'].fillna(all['start'].shift(-1))
     all['activity'] = all['activity'].fillna(method='ffill')
+    all['category'] = all['category'].fillna(method='ffill')
     # For days crossing over, truncate at midnight
     all.loc[all['start'].dt.day != all['end'].dt.day,
             'end'] = all['start'].dt.ceil('D')
@@ -50,8 +52,9 @@ def fillDays(rawData):
     return all
 
 
-def getRollingAvgs(allData, low, high, WINDOW_SIZE):
-    allData = allData.iloc[:, 0:3]
+def getRollingAvgs(ACTIVITY_OR_CATEGORY, allData, low, high, WINDOW_SIZE):
+    # allData = allData.iloc[:, 1:4]
+    allData = allData.loc[:, [ACTIVITY_OR_CATEGORY, 'start', 'end']]
     allData['s_trunc'] = allData['start'].dt.floor(
         'D') + datetime.timedelta(hours=low)
     allData['e_trunc'] = allData['start'].dt.floor(
@@ -61,7 +64,7 @@ def getRollingAvgs(allData, low, high, WINDOW_SIZE):
     allData['log'] = np.where(allData['log'] < 0, 0, allData['log'])/3600
     allData['day'] = allData['start'].dt.floor('D')
     all_pivot = pd.pivot_table(allData, values='log', index='day', columns=[
-                               'activity'], aggfunc=np.sum, fill_value=0)
+                               ACTIVITY_OR_CATEGORY], aggfunc=np.sum, fill_value=0)
     rolling_avgs = all_pivot.rolling(WINDOW_SIZE, min_periods=1).mean()
     rolling_sums = all_pivot.rolling(WINDOW_SIZE).sum()
     tidy_rolling_avgs = rolling_avgs.reset_index().melt(
@@ -69,16 +72,19 @@ def getRollingAvgs(allData, low, high, WINDOW_SIZE):
     tidy_rolling_sums = rolling_sums.reset_index().melt(
         id_vars=['day'], value_name='total')
     tidy_rolling_avgs['total'] = tidy_rolling_sums['total']
-    tidy_rolling_avgs['lookback'] = tidy_rolling_sums['day'] + pd.DateOffset(days=-WINDOW_SIZE+1)
+    tidy_rolling_avgs['lookback'] = tidy_rolling_sums['day'] + \
+        pd.DateOffset(days=-WINDOW_SIZE+1)
     return tidy_rolling_avgs
 
 
 # Create a text element and let the reader know the data is loading.
 dataLoadState = st.text('Loading data...')
 
-user_input = st.text_input("input the URL of a PUBLIC \"better tracker\" sheet", "https://docs.google.com/spreadsheets/d/1Qq13N2dgpU8TWwLLJKsmauKQM1Damvykkn2nOnFQ56A/edit#gid=580980480")
+user_input = st.text_input("input the URL of a PUBLIC \"better tracker\" sheet",
+                           "https://docs.google.com/spreadsheets/d/1Qq13N2dgpU8TWwLLJKsmauKQM1Damvykkn2nOnFQ56A/edit#gid=580980480")
 rawData = loadData(
-    user_input)
+    user_input
+)
 # Notify the reader that the data was successfully loaded.
 # dataLoadState.markdown('<h1 style="margin-bottom: 40px">Better Tracker</h1>', unsafe_allow_html=True)
 
@@ -87,7 +93,11 @@ st.markdown('<hr />', unsafe_allow_html=True)
 
 
 dayData = fillDays(rawData)
-st.sidebar.text(f"Your data contains datetimes between: \n{min(rawData['start'])} \n{max(rawData['end'])}")
+ACTIVITY_OR_CATEGORY = st.sidebar.radio(
+    "Analyze by category or activity", ["category", "activity"])
+st.sidebar.markdown('<hr />', unsafe_allow_html=True)
+st.sidebar.text(
+    f"Your data contains datetimes between: \n{min(rawData['start'])} \n{max(rawData['end'])}")
 START_END_DATE = st.sidebar.date_input("Filter by date range", [min(
     rawData['start']).floor('D'), max(rawData['end']).floor('D')])
 
@@ -99,15 +109,16 @@ START_TIME, END_TIME = st.sidebar.slider(
 
 container = st.sidebar.beta_container()
 isAllActivities = st.sidebar.checkbox("Select all", True)
- 
+
 if isAllActivities:
     SELECTED_ACTIVITIES = container.multiselect("Select one or more options:",
-         dayData.activity.unique().tolist(),list(filter(lambda activity : activity != "N/A", dayData.activity.unique().tolist())))
+                                                dayData[ACTIVITY_OR_CATEGORY].unique().tolist(), list(filter(lambda activity: activity != "N/A", dayData[ACTIVITY_OR_CATEGORY].unique().tolist())))
 else:
     SELECTED_ACTIVITIES = container.multiselect("Select one or more options:",
-        dayData.activity.unique().tolist())
+                                                dayData[ACTIVITY_OR_CATEGORY].unique().tolist())
 
-HIDDEN = list(set(dayData.activity.unique()) - set(SELECTED_ACTIVITIES))
+HIDDEN = list(
+    set(dayData[ACTIVITY_OR_CATEGORY].unique()) - set(SELECTED_ACTIVITIES))
 
 if len(START_END_DATE) < 2:
     START_END_DATE = (*START_END_DATE, max(rawData['end']).floor('D'))
@@ -124,7 +135,7 @@ c1 = alt.Chart(filteredData).mark_bar().encode(
         domain=(START_TIME, END_TIME), clamp=True)),
     order=alt.Order('start'),
     color=alt.condition(alt.FieldOneOfPredicate(field='activity', oneOf=[
-                        'N/A']+HIDDEN), alt.value('white'), alt.Color('activity', legend=None)),
+                        'N/A']+HIDDEN), alt.value('white'), alt.Color(ACTIVITY_OR_CATEGORY, legend=None)),
     opacity=alt.condition(selection, alt.value(1), alt.value(.2)),
     tooltip=[
         'activity:N',
@@ -144,25 +155,26 @@ st.markdown('<hr />', unsafe_allow_html=True)
 LOOKBACK = st.number_input(label='Rolling Average Lookback', min_value=1, value=1, step=1,
                            help="This is used to calculate rolling averages and cumulative totals above.")
 
-tidy_rolling_avgs = getRollingAvgs(dayData, START_TIME, END_TIME, LOOKBACK)
+tidy_rolling_avgs = getRollingAvgs(
+    ACTIVITY_OR_CATEGORY, dayData, START_TIME, END_TIME, LOOKBACK)
 filtered_rolling_avgs = tidy_rolling_avgs[(tidy_rolling_avgs["day"].dt.date >= START_DATE) & (
     tidy_rolling_avgs["day"].dt.date <= END_DATE)]
-selection2 = alt.selection_multi(fields=['activity'])
+selection2 = alt.selection_multi(fields=[ACTIVITY_OR_CATEGORY])
 
 c2 = alt.Chart(filtered_rolling_avgs).mark_bar().encode(
     x=alt.X('monthdate(day):O', axis=alt.Axis(title='Date')),
     y=alt.Y('mean', axis=alt.Axis(title=f"{LOOKBACK}-Day Rolling Average")),
     order=alt.Order('mean', sort="descending"),
-    color=alt.Color('activity', legend=None),
+    color=alt.Color(ACTIVITY_OR_CATEGORY, legend=None),
     opacity=alt.condition(selection2, alt.value(1), alt.value(.2)),
     tooltip=[
-        'activity:N',
+        f"{ACTIVITY_OR_CATEGORY}:N",
         alt.Tooltip('mean:Q', format='.2f', title='mean'),
         alt.Tooltip('total:Q', format='.2f', title='total'),
         alt.Tooltip('monthdate(lookback):O', title='lookback'),
         alt.Tooltip('monthdate(day):O', title='day')
-        ]
-).transform_filter(alt.FieldOneOfPredicate(field='activity', oneOf=SELECTED_ACTIVITIES)).add_selection(
+    ]
+).transform_filter(alt.FieldOneOfPredicate(field=ACTIVITY_OR_CATEGORY, oneOf=SELECTED_ACTIVITIES)).add_selection(
     selection2
 )
 
