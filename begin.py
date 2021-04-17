@@ -127,14 +127,14 @@ START_DATE = START_END_DATE[0]
 END_DATE = START_END_DATE[1]
 filteredData = dayData[(dayData["start"].dt.date >= START_DATE) & (
     dayData["start"].dt.date <= END_DATE)]
-selection = alt.selection_multi(fields=['activity'])
+selection = alt.selection_multi(fields=[ACTIVITY_OR_CATEGORY])
 
 c1 = alt.Chart(filteredData).mark_bar().encode(
     x=alt.X('monthdate(start):O', axis=alt.Axis(title='Date')),
     y=alt.Y('Hour', axis=alt.Axis(title="Time"), scale=alt.Scale(
         domain=(START_TIME, END_TIME), clamp=True)),
     order=alt.Order('start'),
-    color=alt.condition(alt.FieldOneOfPredicate(field='activity', oneOf=[
+    color=alt.condition(alt.FieldOneOfPredicate(field=ACTIVITY_OR_CATEGORY, oneOf=[
                         'N/A']+HIDDEN), alt.value('white'), alt.Color(ACTIVITY_OR_CATEGORY, legend=None)),
     opacity=alt.condition(selection, alt.value(1), alt.value(.2)),
     tooltip=[
@@ -146,6 +146,7 @@ c1 = alt.Chart(filteredData).mark_bar().encode(
 ).add_selection(
     selection
 )
+st.text(['N/A']+HIDDEN)
 st.markdown('See the sidebar to change the scale of the graph.')
 st.altair_chart(c1, use_container_width=True)
 st.markdown('This website is best viewed on a computer so you can hover over data elements. Click on a time block to highlight all instances of that activity. You can use multiple selections with shift+click.')
